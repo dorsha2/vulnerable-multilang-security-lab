@@ -1,0 +1,47 @@
+name: Claude Code Security
+
+on:
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  claude-review:
+    name: claude-review
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 2
+
+      - name: Run Claude Code security review
+        uses: anthropics/claude-code-security-review@main
+        with:
+          comment-pr: true
+          upload-results: true
+          claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
+
+      - name: Gate PR on HIGH/CRITICAL findings only
+        if: always()
+        shell: bash
+        run: |
+          if [ ! -f claudecode-results.json ]; then
+            echo "No claudecode-results.json found, skipping severity gate."
+            exit 0
+          fi
+
+          COUNT=$(jq '[.findings[]? | (.severity // "" | ascii_upcase) | select(. == "HIGH" or . == "CRITICAL")] | length' claudecode-results.json)
+          echo "High/Critical findings: ${COUNT}"
+
+          if [ "${COUNT}" -gt 0 ]; then
+            echo "::error::Claude security scan detected ${COUNT} HIGH/CRITICAL vulnerabilities."
+            jq '.findings[]? | select((.severity // "" | ascii_upcase) == "HIGH" or (.severity // "" | ascii_upcase) == "CRITICAL") | {severity, file, line, category, description}' claudecode-results.json
+            exit 1
+          fi
+
+          echo "No HIGH/CRITICAL Claude findings."
