@@ -20,10 +20,13 @@ jobs:
           fetch-depth: 2
 
       - name: Run Claude Code security review
+        id: claude_scan
         uses: anthropics/claude-code-security-review@main
         with:
           comment-pr: true
           upload-results: true
+          run-every-commit: true
+          custom-security-scan-instructions: .github/claude-security-instructions.txt
           claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
 
       - name: Gate PR on HIGH/CRITICAL findings only
@@ -31,9 +34,11 @@ jobs:
         shell: bash
         run: |
           if [ ! -f claudecode-results.json ]; then
-            echo "No claudecode-results.json found, skipping severity gate."
-            exit 0
+            echo "::error::No claudecode-results.json found. Treating as scan failure."
+            exit 1
           fi
+
+          echo "Raw findings count from action output: ${{ steps.claude_scan.outputs.findings-count }}"
 
           COUNT=$(jq '[.findings[]? | (.severity // "" | ascii_upcase) | select(. == "HIGH" or . == "CRITICAL")] | length' claudecode-results.json)
           echo "High/Critical findings: ${COUNT}"

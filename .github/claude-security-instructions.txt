@@ -1,0 +1,9 @@
+Focus heavily on exploitable injection and remote code execution paths in changed files.
+For this repository, treat the following as HIGH or CRITICAL severity:
+- Command injection from untrusted input
+- SQL injection from untrusted input
+- Insecure deserialization of untrusted input
+- Dynamic code execution of untrusted input (eval/exec/new Function)
+- Hardcoded production secrets or tokens
+
+When any of these appear in changed code, report the finding with explicit severity, file path, and line number.
