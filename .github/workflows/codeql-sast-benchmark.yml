@@ -66,17 +66,39 @@ jobs:
           high = 0
           critical_like = 0
 
+          def parse_sev(value):
+              try:
+                  return float(value)
+              except Exception:
+                  return 0.0
+
+          def level_to_sev(level):
+              if level == "error":
+                  return 9.0
+              if level == "warning":
+                  return 5.0
+              return 0.0
+
           for path in files:
               with open(path, "r", encoding="utf-8") as f:
                   data = json.load(f)
               for run in data.get("runs", []):
+                  rules_by_id = {}
+                  for rule in run.get("tool", {}).get("driver", {}).get("rules", []):
+                      rid = rule.get("id")
+                      sev = parse_sev(rule.get("properties", {}).get("security-severity", "0"))
+                      if sev == 0.0:
+                          sev = level_to_sev(rule.get("defaultConfiguration", {}).get("level", ""))
+                      if rid:
+                          rules_by_id[rid] = sev
+
                   for result in run.get("results", []):
                       total += 1
-                      raw = result.get("properties", {}).get("security-severity", "0")
-                      try:
-                          sev = float(raw)
-                      except Exception:
-                          sev = 0.0
+                      sev = parse_sev(result.get("properties", {}).get("security-severity", "0"))
+                      if sev == 0.0:
+                          sev = rules_by_id.get(result.get("ruleId", ""), 0.0)
+                      if sev == 0.0:
+                          sev = level_to_sev(result.get("level", ""))
                       if sev >= 7.0:
                           high += 1
                       if sev >= 9.0:
