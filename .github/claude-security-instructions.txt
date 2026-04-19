@@ -1,0 +1,11 @@
+Focus heavily on exploitable injection and remote code execution paths in changed files.
+For this repository, treat the following as HIGH or CRITICAL severity:
+- Command injection from untrusted input
+- SQL injection from untrusted input
+- Insecure deserialization of untrusted input
+- Dynamic code execution of untrusted input (eval/exec/new Function)
+- Hardcoded production secrets or tokens
+- Insecure IaC defaults that expose resources publicly
+- GitHub Actions workflows that execute user-controllable shell commands
+
+When any of these appear in changed code, report findings with explicit severity, file path, and line number.

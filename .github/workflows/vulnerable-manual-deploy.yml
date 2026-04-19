@@ -1,0 +1,24 @@
+name: Vulnerable Manual Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      user_command:
+        description: "Command to run on runner"
+        required: true
+        default: "echo hello"
+
+permissions:
+  contents: read
+
+jobs:
+  unsafe-run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run untrusted command (intentionally vulnerable)
+        run: |
+          echo "Executing: ${{ github.event.inputs.user_command }}"
+          bash -lc "${{ github.event.inputs.user_command }}"
