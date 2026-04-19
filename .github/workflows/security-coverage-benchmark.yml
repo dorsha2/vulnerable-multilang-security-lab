@@ -1,0 +1,86 @@
+name: Security Coverage Benchmark
+
+on:
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+  actions: read
+  security-events: write
+
+jobs:
+  iac-checkov:
+    name: iac-checkov
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Checkov
+        run: pip install checkov
+
+      - name: Scan Terraform IaC
+        run: checkov -d iac --framework terraform --compact --quiet
+
+  workflow-zizmor:
+    name: workflow-zizmor
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Scan workflows with zizmor
+        uses: zizmorcore/zizmor-action@b1d7e1fb5de872772f31590499237e7cce841e8e
+        with:
+          advanced-security: false
+          min-severity: low
+          inputs: .github/workflows
+
+  malware-guarddog:
+    name: malware-guarddog
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install GuardDog
+        run: pip install guarddog
+
+      - name: Confirm app references malicious dependency
+        run: |
+          grep -n "npm-env-stealer" javascript/package.json
+
+      - name: Scan malicious packages
+        shell: bash
+        run: |
+          set +e
+          guarddog npm scan ./malicious/npm-env-stealer --exit-non-zero-on-finding --output-format json > guarddog-npm.json
+          NPM_EXIT=$?
+
+          guarddog pypi scan ./malicious/pypi-dropper --exit-non-zero-on-finding --output-format json > guarddog-pypi.json
+          PYPI_EXIT=$?
+
+          echo "npm scan exit: ${NPM_EXIT}"
+          echo "pypi scan exit: ${PYPI_EXIT}"
+
+          if [ "$NPM_EXIT" -ne 0 ] || [ "$PYPI_EXIT" -ne 0 ]; then
+            echo "::error::GuardDog detected malicious package behavior."
+            exit 1
+          fi

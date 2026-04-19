@@ -1,0 +1,97 @@
+name: CodeQL SAST Benchmark
+
+on:
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+  actions: read
+  security-events: write
+
+jobs:
+  codeql:
+    name: codeql-sast (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: javascript-typescript
+            build_mode: none
+          - language: python
+            build_mode: none
+          - language: java-kotlin
+            build_mode: autobuild
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build_mode }}
+          queries: +security-extended
+
+      - name: Autobuild
+        if: matrix.build_mode == 'autobuild'
+        uses: github/codeql-action/autobuild@v4
+
+      - name: Analyze
+        id: analyze
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:${{ matrix.language }}
+          output: sarif-results
+
+      - name: Gate on HIGH security-severity findings
+        shell: bash
+        env:
+          SARIF_DIR: ${{ steps.analyze.outputs.sarif-output }}
+          LANGUAGE: ${{ matrix.language }}
+        run: |
+          python3 - <<'PY'
+          import glob
+          import json
+          import os
+          import sys
+
+          sarif_dir = os.environ.get("SARIF_DIR", "")
+          language = os.environ.get("LANGUAGE", "unknown")
+          files = glob.glob(os.path.join(sarif_dir, "**", "*.sarif"), recursive=True)
+
+          total = 0
+          high = 0
+          critical_like = 0
+
+          for path in files:
+              with open(path, "r", encoding="utf-8") as f:
+                  data = json.load(f)
+              for run in data.get("runs", []):
+                  for result in run.get("results", []):
+                      total += 1
+                      raw = result.get("properties", {}).get("security-severity", "0")
+                      try:
+                          sev = float(raw)
+                      except Exception:
+                          sev = 0.0
+                      if sev >= 7.0:
+                          high += 1
+                      if sev >= 9.0:
+                          critical_like += 1
+
+          summary = (
+              f"CodeQL {language}: total findings={total}, "
+              f"high_or_higher={high}, critical_like={critical_like}"
+          )
+          print(summary)
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as s:
+              s.write(summary + "\n")
+
+          if high > 0:
+              print("::error::CodeQL found HIGH-or-higher issues.")
+              sys.exit(1)
+          PY

