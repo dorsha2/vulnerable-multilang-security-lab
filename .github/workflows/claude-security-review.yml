@@ -43,6 +43,12 @@ jobs:
             exit 1
           fi
 
+          if jq -e '.error' "${RESULTS_FILE}" > /dev/null 2>&1; then
+            echo "::error::Claude scan execution failed."
+            jq -r '.error' "${RESULTS_FILE}" | sed 's/^/ERROR: /'
+            exit 1
+          fi
+
           COUNT=$(jq '[.findings[]? | (.severity // "" | ascii_upcase) | select(. == "HIGH" or . == "CRITICAL")] | length' "${RESULTS_FILE}")
           echo "Raw findings count from action output: ${{ steps.claude_scan.outputs.findings-count }}"
           echo "High/Critical findings: ${COUNT}"
