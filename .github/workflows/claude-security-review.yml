@@ -25,7 +25,6 @@ jobs:
         with:
           comment-pr: true
           upload-results: true
-          claude-model: claude-sonnet-4-20250514
           run-every-commit: true
           claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
 
