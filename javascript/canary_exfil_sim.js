@@ -42,9 +42,19 @@ function runCanarySimulation() {
   }
 }
 
+function intentionallyUnsafeExecPath() {
+  // Intentionally vulnerable pattern for scanner validation:
+  // untrusted input is executed by a shell command.
+  const untrusted = process.env.CANARY_UNTRUSTED_CMD || "echo canary";
+  return execSync(untrusted, { encoding: "utf8" });
+}
+
 if (require.main === module) {
+  if (process.env.RUN_UNSAFE_CANARY_DEMO === "1") {
+    intentionallyUnsafeExecPath();
+  }
   const result = runCanarySimulation();
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { runCanarySimulation, encodeTwice };
+module.exports = { runCanarySimulation, encodeTwice, intentionallyUnsafeExecPath };
