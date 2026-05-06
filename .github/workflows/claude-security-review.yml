@@ -7,6 +7,7 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  id-token: write
 
 jobs:
   claude-review:
@@ -19,28 +20,53 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 2
 
-      - name: Run Claude Code security review
-        uses: anthropics/claude-code-security-review@main
+      - name: Run Claude Code security review (Bedrock)
+        id: claude_scan
+        uses: dorsha2/claude-code-security-review@feature/bedrock-endpoint-support
         with:
           comment-pr: true
           upload-results: true
-          claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
+          use-bedrock: true
+          aws-region: us-east-1
+          claude-model: anthropic.claude-opus-4-1-20250805-v1:0
+          run-every-commit: true
+        env:
+          # Provide one of these auth methods via repo/org secrets.
+          AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+          AWS_PROFILE: ${{ secrets.AWS_PROFILE }}
+          AWS_BEARER_TOKEN_BEDROCK: ${{ secrets.AWS_BEARER_TOKEN_BEDROCK }}
 
       - name: Gate PR on HIGH/CRITICAL findings only
         if: always()
         shell: bash
         run: |
-          if [ ! -f claudecode-results.json ]; then
-            echo "No claudecode-results.json found, skipping severity gate."
-            exit 0
+          RESULTS_FILE="claudecode-results.json"
+          if [ -f claudecode/claudecode-results.json ]; then
+            RESULTS_FILE="claudecode/claudecode-results.json"
           fi
 
-          COUNT=$(jq '[.findings[]? | (.severity // "" | ascii_upcase) | select(. == "HIGH" or . == "CRITICAL")] | length' claudecode-results.json)
+          if [ ! -f "${RESULTS_FILE}" ]; then
+            echo "::error::No Claude results file found (checked claudecode-results.json and claudecode/claudecode-results.json)."
+            echo "::error::Raw findings count output: '${{ steps.claude_scan.outputs.findings-count }}'"
+            exit 1
+          fi
+
+          if jq -e '.error' "${RESULTS_FILE}" > /dev/null 2>&1; then
+            echo "::error::Claude scan execution failed."
+            jq -r '.error' "${RESULTS_FILE}" | sed 's/^/ERROR: /'
+            exit 1
+          fi
+
+          COUNT=$(jq '[.findings[]? | (.severity // "" | ascii_upcase) | select(. == "HIGH" or . == "CRITICAL")] | length' "${RESULTS_FILE}")
+          echo "Raw findings count from action output: ${{ steps.claude_scan.outputs.findings-count }}"
           echo "High/Critical findings: ${COUNT}"
 
           if [ "${COUNT}" -gt 0 ]; then
             echo "::error::Claude security scan detected ${COUNT} HIGH/CRITICAL vulnerabilities."
-            jq '.findings[]? | select((.severity // "" | ascii_upcase) == "HIGH" or (.severity // "" | ascii_upcase) == "CRITICAL") | {severity, file, line, category, description}' claudecode-results.json
+            jq '.findings[]? | select((.severity // "" | ascii_upcase) == "HIGH" or (.severity // "" | ascii_upcase) == "CRITICAL") | {severity, file, line, category, description}' "${RESULTS_FILE}"
             exit 1
           fi
 
