@@ -20,13 +20,6 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 2
 
-      - name: Configure AWS credentials via OIDC (optional)
-        if: ${{ secrets.AWS_ROLE_TO_ASSUME != '' }}
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: us-east-1
-
       - name: Run Claude Code security review (Bedrock)
         id: claude_scan
         uses: dorsha2/claude-code-security-review@feature/bedrock-endpoint-support
@@ -38,7 +31,8 @@ jobs:
           claude-model: anthropic.claude-opus-4-1-20250805-v1:0
           run-every-commit: true
         env:
-          # If not using OIDC role assumption above, set one of these auth methods via repo/org secrets.
+          # Provide one of these auth methods via repo/org secrets.
+          AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
